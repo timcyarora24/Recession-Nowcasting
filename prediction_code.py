@@ -14,14 +14,15 @@ from sklearn.metrics import (
     roc_auc_score,
     precision_recall_curve,
 )
+import joblib
 
 warnings.filterwarnings("ignore")
-os.makedirs("data/results", exist_ok=True)
+os.makedirs("Recession-Nowcasting/data/results", exist_ok=True)
 
 
 
 
-FEATURES_PATH   = "data/processed/master_features.csv"
+FEATURES_PATH   = "Recession-Nowcasting/data/processed/master_features.csv"
 EVAL_START      = "2000-01-01"
 BLACKOUT_MONTHS = 24       # NBER announcement lag buffer
 SIGNAL_THRESHOLD = 0.35   # for lead-time and false-alarm reporting
@@ -468,7 +469,7 @@ def run_shap_analysis(feature_cols_clean):
                 shap_vals = shap_vals[1]
 
             shap_df = pd.DataFrame(shap_vals, index=X_pr_s.index, columns=X_pr_s.columns)
-            shap_df.to_csv(f"data/results/shap_values_{recession}.csv")
+            shap_df.to_csv(f"Recession-Nowcasting/data/results/shap_values_{recession}.csv")
 
             mean_abs = shap_df.abs().mean().sort_values(ascending=False)
             all_top_features[recession] = mean_abs
@@ -554,7 +555,7 @@ if __name__ == "__main__":
     a_ts = df_lgbm_h0["actual"].astype(int).values
     thresh_df = threshold_sweep(p_ts, a_ts)
     print(thresh_df.to_string(index=False))
-    thresh_df.to_csv("data/results/threshold_sweep.csv", index=False)
+    thresh_df.to_csv("Recession-Nowcasting/data/results/threshold_sweep.csv", index=False)
 
    
     print(f"\n--- Lead Time vs NBER Announcement (threshold={SIGNAL_THRESHOLD}) ---")
@@ -562,14 +563,14 @@ if __name__ == "__main__":
     avg_lead = lead_df["months_before"].dropna().mean()
     print(lead_df.to_string(index=False))
     print(f"\n  Average lead: {avg_lead:.1f} months before NBER announcement")
-    lead_df.to_csv("data/results/lead_time.csv", index=False)
+    lead_df.to_csv("Recession-Nowcasting/data/results/lead_time.csv", index=False)
 
     
     print("\n--- Reliability Diagram (LightGBM) ---")
     rel_df = reliability_stats(p_ts, a_ts, n_bins=10)
     print(rel_df.to_string(index=False))
     print("  (mean_pred ≈ mean_obs = well calibrated)")
-    rel_df.to_csv("data/results/reliability.csv", index=False)
+    rel_df.to_csv("Recession-Nowcasting/data/results/reliability.csv", index=False)
 
     
     print("\n" + "=" * 60)
@@ -607,7 +608,7 @@ if __name__ == "__main__":
         })
 
     horizon_df = pd.DataFrame(horizon_rows)
-    horizon_df.to_csv("data/results/metrics_by_horizon.csv", index=False)
+    horizon_df.to_csv("Recession-Nowcasting/data/results/metrics_by_horizon.csv", index=False)
     print("\n--- Horizon Decay Table ---")
     print(horizon_df.to_string(index=False))
 
@@ -622,9 +623,9 @@ if __name__ == "__main__":
     df_ensemble["model"]  = "ensemble"
 
     pd.concat([df_lgbm_h0, df_probit_h0, df_ensemble]).to_csv(
-        "data/results/predictions_all.csv")
-    df_lgbm_h0.to_csv("data/results/predictions_full.csv")
-    df_ensemble.to_csv("data/results/predictions_ensemble.csv")
+        "Recession-Nowcasting/data/results/predictions_all.csv")
+    df_lgbm_h0.to_csv("Recession-Nowcasting/data/results/predictions_full.csv")
+    df_ensemble.to_csv("Recession-Nowcasting/data/results/predictions_ensemble.csv")
 
     metrics = pd.DataFrame({
         "model":        ["lgbm", "ensemble", "probit"],
@@ -635,7 +636,7 @@ if __name__ == "__main__":
         "BS_expansion": [brier_lgbm["BS_expansion"], brier_ens["BS_expansion"], brier_probit["BS_expansion"]],
         "false_alarm":  [far_lgbm,    far_ens,    far_probit],
     })
-    metrics.to_csv("data/results/metrics_summary.csv", index=False)
+    metrics.to_csv("Recession-Nowcasting/data/results/metrics_summary.csv", index=False)
 
     
     print("\n" + "=" * 60)
@@ -669,6 +670,29 @@ if __name__ == "__main__":
     print(f"\n  Risk level  : {risk}")
 
    
+
+# Train final model on ALL available data (for live deployment)
+    print("\nTraining final model on full dataset for deployment...")
+    X_final = X_all.copy()
+    y_final = y_all.copy()
+
+    valid_mask = y_final.notna()
+    X_final = X_final[valid_mask]
+    y_final = y_final[valid_mask].astype(int)
+
+    X_final_scaled, _, final_scaler = normalize(X_final, X_final)
+    spw_final = get_class_weight(y_final)
+    final_model = train_lgbm(X_final_scaled, y_final, spw_final)
+
+    # Save model + scaler + feature list (all 3 needed for inference)
+    os.makedirs("Recession-Nowcasting/model", exist_ok=True)
+    joblib.dump(final_model,   "Recession-Nowcasting/model/lgbm_final.joblib")
+    joblib.dump(final_scaler,  "Recession-Nowcasting/model/scaler_final.joblib")
+    joblib.dump(feature_cols,  "Recession-Nowcasting/model/feature_cols.joblib")
+
+    print("  Saved Recession-Nowcasting/model/lgbm_final.joblib")
+    print("  Saved Recession-Nowcasting/model/scaler_final.joblib")
+    print("  Saved Recession-Nowcasting/model/feature_cols.joblib")
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETE — FINAL RESULTS")
     print("=" * 60)
@@ -686,17 +710,17 @@ if __name__ == "__main__":
 
     print("\nOutput files:")
     outputs = [
-        "data/results/predictions_full.csv",
-        "data/results/predictions_ensemble.csv",
-        "data/results/predictions_all.csv",
-        "data/results/metrics_summary.csv",
-        "data/results/metrics_by_horizon.csv",
-        "data/results/threshold_sweep.csv",
-        "data/results/lead_time.csv",
-        "data/results/reliability.csv",
-        "data/results/shap_values_2001.csv",
-        "data/results/shap_values_2008.csv",
-        "data/results/shap_values_2020.csv",
+        "Recession-Nowcasting/data/results/predictions_full.csv",
+        "Recession-Nowcasting/data/results/predictions_ensemble.csv",
+        "Recession-Nowcasting/data/results/predictions_all.csv",
+        "Recession-Nowcasting/data/results/metrics_summary.csv",
+        "Recession-Nowcasting/data/results/metrics_by_horizon.csv",
+        "Recession-Nowcasting/data/results/threshold_sweep.csv",
+        "Recession-Nowcasting/data/results/lead_time.csv",
+        "Recession-Nowcasting/data/results/reliability.csv",
+        "Recession-Nowcasting/data/results/shap_values_2001.csv",
+        "Recession-Nowcasting/data/results/shap_values_2008.csv",
+        "Recession-Nowcasting/data/results/shap_values_2020.csv",
     ]
     for f in outputs:
         print(f"  {f}")
