@@ -9,7 +9,7 @@ I built this to answer: can a model built on real-time macro/market data flag a 
 <div align="center">
 
 | ROC-AUC (nowcast) | Avg. lead vs. NBER announcement | False alarm rate | 
-|---|---|---|---|
+|---|---|---|
 | **0.965** | **~5 months early** | **1.4%** | 
 
 </div>
