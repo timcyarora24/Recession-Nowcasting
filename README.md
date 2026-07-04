@@ -9,7 +9,7 @@ I built this to answer: can a model built on real-time macro/market data flag a 
 <div align="center">
 
 | ROC-AUC (nowcast) | Avg. lead vs. NBER announcement | False alarm rate | 
-|:---:|:---:|:---:|:---:|
+|---|---|---|---|
 | **0.965** | **~5 months early** | **1.4%** | 
 
 </div>
@@ -68,8 +68,7 @@ Walk-forward evaluation, expanding window, from 2000-01
  └── Stacked ensemble (meta-model over both)
       │
 Isotonic calibration
-      │
-      
+      │     
 Evaluation: ROC-AUC, PR-AUC, Brier decomposition, block
 bootstrap, threshold sweep, reliability curves, SHAP,
 lead-time vs. NBER announcements, multi-horizon decay
